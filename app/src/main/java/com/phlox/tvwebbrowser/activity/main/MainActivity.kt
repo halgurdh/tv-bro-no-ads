@@ -56,6 +56,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.phlox.tvwebbrowser.AppContext
 import com.phlox.tvwebbrowser.Config
+import com.phlox.tvwebbrowser.DedicatedSite
 import com.phlox.tvwebbrowser.R
 import com.phlox.tvwebbrowser.TVBro
 import com.phlox.tvwebbrowser.activity.IncognitoModeMainActivity
@@ -181,6 +182,12 @@ open class MainActivity : AppCompatActivity(), ActionBar.Callback {
             if (isOnHomePage()) moveTaskToBack(true) else navigate(settingsModel.homePage)
         }
         vb.ibBack.setOnClickListener { navigateBack() }
+        if (Utils.isFireTV(this)) {
+            vb.ibSiteVoiceSearch.visibility = View.GONE //like the action bar's mic: no voice search there
+        } else {
+            vb.ibSiteVoiceSearch.contentDescription = getString(R.string.voice_search_on_site, DedicatedSite.NAME)
+            vb.ibSiteVoiceSearch.setOnClickListener { initiateVoiceSearch() }
+        }
         vb.ibForward.setOnClickListener {
             val tab = tabsModel.currentTab.value ?: return@setOnClickListener
             if (tab.webEngine.canGoForward()) {
@@ -809,8 +816,7 @@ open class MainActivity : AppCompatActivity(), ActionBar.Callback {
                 return
             }
 
-            val searchUrl = config.searchEngineURL.value.replace("[query]", query!!)
-            navigate(searchUrl)
+            navigate(DedicatedSite.searchUrl(config.siteDomain, query!!))
         }
     }
 
@@ -887,9 +893,14 @@ open class MainActivity : AppCompatActivity(), ActionBar.Callback {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         val localCallback = window.callback
+        //fullscreen video: double OK plays/pauses (only there, elsewhere a click isn't held back)
+        val doubleOk = DoubleOkDetector(uiHandler, { localCallback.dispatchKeyEvent(it) }) {
+            tabsModel.currentTab.value?.webEngine?.togglePlayback()
+        }
         window.callback = object : Window.Callback by localCallback {
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                 //Log.d(TAG, "dispatchKeyEvent event: $event")
+                if ((isFullscreen || doubleOk.isBusy) && doubleOk.dispatchKeyEvent(event)) return true
                 backNavigationEventsAdapter.dispatchKeyEvent(event)
 
                 val keyCode = if (event.keyCode != 0) event.keyCode else event.scanCode
@@ -949,11 +960,8 @@ open class MainActivity : AppCompatActivity(), ActionBar.Callback {
             tabsModel.currentTab.value?.webEngine?.hideFullscreenView()
         } else if (vb.llBottomPanel.isVisible && !vb.rlActionBar.isVisible) {
             hideBottomPanel()
-        } else if (vb.rlActionBar.isVisible && tabsModel.currentTab.value?.webEngine?.canGoBack() == true) {
-            //first press shows the menu, second press goes back like in a normal browser
-            hideMenuOverlay()
-            tabsModel.currentTab.value?.webEngine?.goBack()
         } else {
+            //back never leaves the page: it shows (or hides) the menu, going back is the menu's Back button
             toggleMenu()
         }
     }
@@ -978,7 +986,8 @@ open class MainActivity : AppCompatActivity(), ActionBar.Callback {
                 .translationY(0f)
                 .alpha(1f)
                 .withEndAction {
-                    vb.vActionBar.catchFocus()
+                    //the site's voice search is the first thing to press when the menu opens
+                    if (vb.ibSiteVoiceSearch.isVisible) vb.ibSiteVoiceSearch.requestFocus() else vb.vActionBar.catchFocus()
                 }
                 .start()
 
@@ -1300,6 +1309,7 @@ open class MainActivity : AppCompatActivity(), ActionBar.Callback {
             if (tabByTitleIndex(vb.vTabs.current) == tab) {
                 vb.vActionBar.setAddressBoxText(tab.url)
             }
+            config.onSiteVisited(Uri.parse(tab.url).host)
 
             //thumbnail
             tabsModel.tabsStates.onEach { if (it != tab) it.thumbnail = null }

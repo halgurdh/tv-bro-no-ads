@@ -34,6 +34,10 @@ Object.defineProperty(HTMLMediaElement.prototype, 'playing', {
 })
 
 window.tvBroTogglePlayback = function() {
+  if (window.__tvakhiTogglePlayback) { //from autofullscreen.js: also reaches videos in frames
+      window.__tvakhiTogglePlayback();
+      return;
+  }
   var media = document.querySelector('video') || document.querySelector('audio');
   if (media) {
       if (media.playing) {

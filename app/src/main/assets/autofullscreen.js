@@ -1,4 +1,61 @@
 /* TV Akhi: injected at document start in WebView. Same logic as in the GeckoView extension content.js */
+//play/pause from the remote (double OK, play/pause key): the video is often in a frame of another site, so a frame
+//without a video of its own passes it on to its frames
+(function () {
+    'use strict';
+    if (window.__tvakhiTogglePlayback) return;
+    const MESSAGE = 'tvakhi-toggle-playback';
+    function mainVideo() {
+        let best = null, bestArea = 0;
+        for (const v of document.querySelectorAll('video')) {
+            const r = v.getBoundingClientRect();
+            if (r.width < 200 || r.height < 100) continue; //previews and tiny players
+            if (r.width * r.height > bestArea) { best = v; bestArea = r.width * r.height; }
+        }
+        return best;
+    }
+    function toggle() {
+        const video = mainVideo();
+        if (video) {
+            if (video.paused || video.ended) {
+                const p = video.play();
+                if (p && p.catch) p.catch(function () {});
+            } else {
+                video.pause();
+            }
+            return;
+        }
+        for (const f of document.querySelectorAll('iframe, frame')) {
+            try { f.contentWindow.postMessage(MESSAGE, '*'); } catch (e) {}
+        }
+    }
+    window.__tvakhiTogglePlayback = toggle;
+    window.addEventListener('message', function (e) {
+        if (e.data === MESSAGE && e.source === window.parent && window.parent !== window) toggle();
+    });
+})();
+
+//players in frames can only go fullscreen if their frame allows it: allowed before the frame loads
+(function () {
+    'use strict';
+    if (window.__tvakhiFramesFullscreen) return;
+    window.__tvakhiFramesFullscreen = true;
+    function allow(frame) {
+        if (!frame.hasAttribute('allowfullscreen')) frame.setAttribute('allowfullscreen', '');
+        const policy = frame.getAttribute('allow');
+        if (policy !== null && !/(^|;)\s*fullscreen/.test(policy)) frame.setAttribute('allow', policy + '; fullscreen');
+    }
+    new MutationObserver(function (mutations) {
+        for (const m of mutations) {
+            for (const n of m.addedNodes) {
+                if (n.nodeType !== 1) continue;
+                if (n.tagName === 'IFRAME') allow(n);
+                else if (n.querySelectorAll) n.querySelectorAll('iframe').forEach(allow);
+            }
+        }
+    }).observe(document, { childList: true, subtree: true });
+})();
+
 (function () {
     'use strict';
     if (!window.TVBro || window.__tvakhiAutoFullscreen) return;

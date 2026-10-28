@@ -88,6 +88,19 @@
         android:gravity="center">
 
         <ImageButton
+            android:id="@+id/ibSiteVoiceSearch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/button_bg_selector"
+            android:contentDescription="@string/voice_search"
+            android:src="@drawable/ic_mic_none_grey_900_36dp"
+            android:layout_margin="3dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/ibCloseTab"
+            app:layout_constraintHorizontal_chainStyle="packed"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <ImageButton
             android:id="@+id/ibCloseTab"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -98,7 +111,7 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/ibBack"
             app:layout_constraintHorizontal_chainStyle="packed"
-            app:layout_constraintStart_toStartOf="parent" />
+            app:layout_constraintStart_toEndOf="@+id/ibSiteVoiceSearch" />
 
         <ImageButton
             android:id="@+id/ibBack"

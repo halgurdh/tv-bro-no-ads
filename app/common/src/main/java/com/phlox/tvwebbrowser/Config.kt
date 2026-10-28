@@ -2,6 +2,7 @@ package com.phlox.tvwebbrowser
 
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Build
 import com.phlox.tvwebbrowser.utils.Utils
 import com.phlox.tvwebbrowser.utils.observable.ObservableValue
@@ -11,6 +12,8 @@ class Config(val prefs: SharedPreferences) {
         const val SEARCH_ENGINE_URL_PREF_KEY = "search_engine_url"
         const val SEARCH_ENGINE_AS_HOME_PAGE_KEY = "search_engine_as_home_page"
         const val HOME_PAGE_KEY = "home_page"
+        const val DEDICATED_SITE_KEY = "dedicated_site"
+        const val DEDICATED_SITE_DOMAIN_KEY = "dedicated_site_domain"
         const val USER_AGENT_PREF_KEY = "user_agent"
         const val THEME_KEY = "theme"
         const val LAST_UPDATE_USER_NOTIFICATION_TIME_KEY = "last_update_notif"
@@ -169,10 +172,37 @@ class Config(val prefs: SharedPreferences) {
         }
 
     var homePage: String
-        get() = prefs.getString(HOME_PAGE_KEY, HOME_URL_ALIAS)!!
+        get() = prefs.getString(HOME_PAGE_KEY, DedicatedSite.homeUrl(siteDomain))!!
         set(value) {
             prefs.edit().putString(HOME_PAGE_KEY, value).apply()
         }
+
+    /** the dedicated site's current domain: the one the app last landed on */
+    val siteDomain: String
+        get() = prefs.getString(DEDICATED_SITE_DOMAIN_KEY, null) ?: DedicatedSite.KNOWN_DOMAINS[0]
+
+    init {
+        //the dedicated site becomes the home page and sets the voice search language once (first start, or another
+        //site), both can be changed after
+        if (prefs.getString(DEDICATED_SITE_KEY, null) != DedicatedSite.SETUP_ID) {
+            prefs.edit()
+                .remove(DEDICATED_SITE_DOMAIN_KEY)
+                .putString(VOICE_SEARCH_LANGUAGE_KEY, DedicatedSite.VOICE_LANGUAGE)
+                .putInt(HOME_PAGE_MODE, HomePageMode.CUSTOM.ordinal)
+                .putString(HOME_PAGE_KEY, DedicatedSite.homeUrl(DedicatedSite.KNOWN_DOMAINS[0]))
+                .putString(DEDICATED_SITE_KEY, DedicatedSite.SETUP_ID)
+                .apply()
+        }
+    }
+
+    /** A page of [host] was loaded: if it is the site on a new domain, the domain and the home page follow it */
+    fun onSiteVisited(host: String?) {
+        if (host == null || !DedicatedSite.isSiteHost(host)) return
+        val domain = DedicatedSite.domainOf(host)
+        if (domain == siteDomain) return
+        prefs.edit().putString(DEDICATED_SITE_DOMAIN_KEY, domain).apply()
+        if (DedicatedSite.isSiteHost(Uri.parse(homePage).host)) homePage = DedicatedSite.homeUrl(domain)
+    }
 
     var searchEngineURL = ObservableStringPreference(SearchEnginesURLs[SearchEnginesNames.indexOf("ddg")], SEARCH_ENGINE_URL_PREF_KEY)
 
@@ -278,7 +308,7 @@ class Config(val prefs: SharedPreferences) {
         }
 
     var voiceSearchLanguage: String
-        get() = prefs.getString(VOICE_SEARCH_LANGUAGE_KEY, "en")!!
+        get() = prefs.getString(VOICE_SEARCH_LANGUAGE_KEY, DedicatedSite.VOICE_LANGUAGE)!!
         set(value) {
             prefs.edit().putString(VOICE_SEARCH_LANGUAGE_KEY, value).apply()
         }
